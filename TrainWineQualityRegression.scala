@@ -3,6 +3,63 @@ import org.apache.spark.ml.feature.VectorAssembler
 import org.apache.spark.sql.functions.col
 import breeze.linalg.{DenseVector => BDV, DenseMatrix => BDM}
 
+// Кастомный блок: вычисление градиента
+object Gradient {
+  def computeGradient(
+      features: BDM[Double],
+      labels: BDV[Double],
+      weights: BDV[Double]): BDV[Double] = {
+    val numExamples = features.rows
+    val predictions = features * weights
+    val residuals = predictions - labels
+    val gradient = (features.t * residuals) / numExamples.toDouble
+    gradient
+  }
+}
+
+// Кастомный блок: оптимизация (градиентный спуск)
+object Optimizer {
+  def gradientDescent(
+      features: BDM[Double],
+      labels: BDV[Double],
+      maxIter: Int): BDV[Double] = {
+    val numFeatures = features.cols
+    var weights = BDV.zeros[Double](numFeatures)
+
+    for (i <- 0 until maxIter) {
+      val gradient = Gradient.computeGradient(features, labels, weights)
+      weights -= gradient
+    }
+    weights
+  }
+}
+
+// Кастомный блок: стандартизация данных
+object StandardScaler {
+  def fitTransform(features: BDM[Double]): BDM[Double] = {
+    val mean = BDV.zeros[Double](features.cols)
+    val stdDev = BDV.ones[Double](features.cols)
+
+    for (i <- 0 until features.cols) {
+      mean(i) = features(::, i).sum / features.rows
+      stdDev(i) = math.sqrt(features(::, i).map(x => math.pow(x - mean(i), 2)).sum / features.rows)
+    }
+
+    val scaledFeatures = (features(*, ::) - mean) /:/ stdDev
+    scaledFeatures
+  }
+}
+
+// Кастомный блок: обновление весов
+object Updater {
+  def updateWeights(
+      weights: BDV[Double],
+      gradient: BDV[Double],
+      learningRate: Double): BDV[Double] = {
+    weights - (gradient * learningRate)
+  }
+}
+
 object TrainWineQualityRegression {
   def main(args: Array[String]): Unit = {
     val spark = SparkSession.builder()
@@ -34,15 +91,14 @@ object TrainWineQualityRegression {
     val featureMatrix = BDM(features: _*)
     val labelVector = BDV(labels)
 
-    // Стандартизация признаков
+    // Кастомный блок: стандартизация признаков
     val scaledFeatures = StandardScaler.fitTransform(featureMatrix)
 
-    // Обучение модели с использованием кастомного градиентного спуска
+    // Кастомный блок: обучение модели с использованием кастомного градиентного спуска
     val maxIter = 10
     val weights = Optimizer.gradientDescent(scaledFeatures, labelVector, maxIter)
 
     // Сохранение обученной модели
-    // В реальном проекте вы бы сериализовали weights и другие параметры модели на диск
     spark.sparkContext.parallelize(weights.toArray).saveAsTextFile("/tmp/wine_quality_regression_weights")
 
     spark.stop()
