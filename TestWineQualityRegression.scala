@@ -35,10 +35,10 @@ object TestWineQualityRegression {
     val featureMatrix = BDM(features: _*)
     val labelVector = BDV(labels)
 
-    // Стандартизация признаков
+    // Кастомный блок: стандартизация признаков
     val scaledFeatures = StandardScaler.fitTransform(featureMatrix)
 
-    // Загрузка весов модели
+    // Кастомный блок: загрузка весов модели
     val weights = BDV(spark.sparkContext.textFile("/tmp/wine_quality_regression_weights").map(_.toDouble).collect())
 
     // Предсказания
@@ -51,4 +51,5 @@ object TestWineQualityRegression {
     spark.stop()
   }
 }
+
 
